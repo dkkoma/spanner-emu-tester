@@ -18,19 +18,23 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	funcs := []func(context.Context, *spanner.Client, int){query, insert, update}
-	times := make([]time.Duration, 0)
-	for _, f := range funcs {
-		fname := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
-		fmt.Printf("----- %s -----\n", fname)
-		for i := 1; i < 100; i++ {
-			t := time.Now()
-			f(ctx, client, i)
-			time := time.Since(t)
-			// fmt.Println(time)
-			times = append(times, time)
+	tables := []string{"table1", "table2"}
+	funcs := []func(context.Context, *spanner.Client, string, int){query, insert, update, query}
+	for _, table := range tables {
+		fmt.Printf("===== %s =====\n", table)
+		for _, f := range funcs {
+			times := make([]time.Duration, 0)
+			fname := runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+			fmt.Printf("----- %s -----\n", fname)
+			for i := 1; i < 100; i++ {
+				t := time.Now()
+				f(ctx, client, table, i)
+				time := time.Since(t)
+				// fmt.Println(time)
+				times = append(times, time)
+			}
+			fmt.Printf("----- %s average time: %v\n", fname, average(times))
 		}
-		fmt.Printf("----- %s average time: %v\n", fname, average(times))
 	}
 }
 
@@ -42,8 +46,8 @@ func average(times []time.Duration) time.Duration {
 	return sum / time.Duration(len(times))
 }
 
-func update(ctx context.Context, client *spanner.Client, i int) {
-	stmt := spanner.Statement{SQL: `UPDATE table SET name = @name WHERE id = @id`}
+func update(ctx context.Context, client *spanner.Client, table string, i int) {
+	stmt := spanner.Statement{SQL: fmt.Sprintf(`UPDATE %s SET name = @name WHERE id = @id`, table)}
 	stmt.Params = make(map[string]interface{})
 	stmt.Params["id"] = i
 	stmt.Params["name"] = fmt.Sprintf("name%d", i)
@@ -57,8 +61,8 @@ func update(ctx context.Context, client *spanner.Client, i int) {
 	}
 }
 
-func insert(ctx context.Context, client *spanner.Client, i int) {
-	stmt := spanner.Statement{SQL: `INSERT INTO table (id, name, createdAt) VALUES (@id, @name, @createdAt)`}
+func insert(ctx context.Context, client *spanner.Client, table string, i int) {
+	stmt := spanner.Statement{SQL: fmt.Sprintf(`INSERT INTO %s (id, name, createdAt) VALUES (@id, @name, @createdAt)`, table)}
 	stmt.Params = make(map[string]interface{})
 	stmt.Params["id"] = i
 	stmt.Params["name"] = fmt.Sprintf("name%d", i)
@@ -73,8 +77,10 @@ func insert(ctx context.Context, client *spanner.Client, i int) {
 	}
 }
 
-func query(ctx context.Context, client *spanner.Client, i int) {
-	stmt := spanner.Statement{SQL: `SELECT count(1) FROM table`}
+func query(ctx context.Context, client *spanner.Client, table string, i int) {
+	stmt := spanner.Statement{SQL: fmt.Sprintf(`SELECT * FROM %s WHERE id = @id`, table)}
+	stmt.Params = make(map[string]interface{})
+	stmt.Params["id"] = i
 	iter := client.Single().Query(ctx, stmt)
 	defer iter.Stop()
 	for {
