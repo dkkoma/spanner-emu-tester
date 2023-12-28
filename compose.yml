@@ -15,7 +15,7 @@ services:
   # spanner-cli -p test -i instance0 -d database0
 
   spanner-emulator:
-    image: gcr.io/cloud-spanner-emulator/emulator:1.5.12
+    image: gcr.io/cloud-spanner-emulator/emulator
 
   gcloud-cli:
     image: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
@@ -28,6 +28,18 @@ services:
              gcloud spanner instances list | grep -q instance0 \
                || gcloud spanner instances create instance0 --config=config_emulator --description="Test Spanner" --nodes=1
              gcloud spanner databases list --instance=instance0 | grep -q database0 \
-               || gcloud spanner databases create database0 --instance=instance0 --ddl="CREATE TABLE table (id INT64, name STRING(MAX)) PRIMARY KEY (id)"'
+               || gcloud spanner databases create database0 --instance=instance0 --ddl-file=/root/.config/gcloud/configurations/ddl.sql'
     volumes:
       - ./config_emulator:/root/.config/gcloud/configurations/config_emulator
+      - ./ddl.sql:/root/.config/gcloud/configurations/ddl.sql
+
+  spanner-cli:
+    image: asia-docker.pkg.dev/k8s-common-224708/colopl/cloudspannerecosystem/spanner-cli:v0.9.13
+    # volumes:
+    #   - "./spanner-cli/spanner_cli.cnf:/root/.spanner_cli.cnf:ro"
+    environment:
+      SPANNER_EMULATOR_HOST: "spanner-emulator:9010"
+    entrypoint: []
+    command: /bin/sh
+    depends_on:
+      - spanner-emulator
